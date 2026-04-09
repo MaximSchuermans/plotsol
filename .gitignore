@@ -1,5 +1,6 @@
 # Node modules (root)
 node_modules/
+app/dist/
 
 # .NET build artifacts
 bin/
