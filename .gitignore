@@ -1,26 +1,34 @@
-# Node modules (root)
+# .NET
+[Bb]in/
+[Oo]bj/
+TestResults/
+*.user
+*.userosscache
+*.sln.doccache
+api/appsettings.*.json
+api/.env
+
+# Production build artifacts
+api/wwwroot/assets/
+api/wwwroot/index.html
+
+# Node
 node_modules/
-app/dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 
-# .NET build artifacts
-bin/
-obj/
-
-# Environment files
-.env
-.env.*.local
-
-# Editor directories and files
+# IDEs
+.vs/
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# OS files
+# OS
 .DS_Store
 Thumbs.db
 
-# Logs
-logs/
-*.log
-
-# Temporary files
-*.tmp
+.env*
+!.env.example

@@ -1,0 +1,37 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  configuration: 'Release'
+
+steps:
+  - task: NodeTool@0
+    inputs:
+      versionSpec: '22.x'
+    displayName: 'Use Node.js 22'
+
+  - task: DotNetCoreCLI@2
+    inputs:
+      command: 'restore'
+      projects: 'api/api.csproj'
+
+  - task: DotNetCoreCLI@2
+    inputs:
+      command: 'publish'
+      projects: 'api/api.csproj'
+      arguments: '--configuration $(configuration) --output $(Build.ArtifactStagingDirectory)/api'
+
+  - task: PublishPipelineArtifact@1
+    inputs:
+      targetPath: '$(Build.ArtifactStagingDirectory)/api'
+      artifact: 'api'

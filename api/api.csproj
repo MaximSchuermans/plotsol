@@ -6,4 +6,22 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <ClientAppDir>$(ProjectDir)../app</ClientAppDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.2" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
+    <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.0.0" />
+    <PackageReference Include="MongoDB.Driver" Version="2.23.0" />
+    <PackageReference Include="DotNetEnv" Version="3.1.1" />
+  </ItemGroup>
+
+  <Target Name="BuildClientApp" BeforeTargets="Build">
+    <Message Text="Building Vite client app" Importance="High" />
+    <Exec Command="npm install" WorkingDirectory="$(ClientAppDir)" />
+    <Exec Command="npm run build" WorkingDirectory="$(ClientAppDir)" />
+  </Target>
+
 </Project>
