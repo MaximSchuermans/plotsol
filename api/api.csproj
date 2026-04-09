@@ -16,6 +16,7 @@
     <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.0.0" />
     <PackageReference Include="MongoDB.Driver" Version="2.23.0" />
     <PackageReference Include="DotNetEnv" Version="3.1.1" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.17.0" />
   </ItemGroup>
 
   <Target Name="BuildClientApp" BeforeTargets="Build">
