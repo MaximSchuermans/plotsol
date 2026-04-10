@@ -76,12 +76,16 @@ export default function DocumentChatPanel({
       const res = await fetch('/chat/threads', { headers: { Authorization: `Bearer ${token}` } })
       if (!res.ok) return
       const data = await res.json()
-      setThreads(Array.isArray(data) ? data : [])
+      const threadsData = Array.isArray(data) ? data : []
+      setThreads(threadsData)
+      if (!activeThreadId && threadsData.length > 0) {
+        setActiveThreadId(threadsData[0].id)
+      }
     } catch { /* noop */
     } finally {
       setIsLoadingThreads(false)
     }
-  }, [token])
+  }, [token, activeThreadId])
 
   const fetchMessages = useCallback(async (threadId) => {
     if (!token || !threadId) return
@@ -254,16 +258,18 @@ export default function DocumentChatPanel({
       className="flex h-full min-h-0 w-full shrink-0 flex-col border-t border-white/5 bg-slate-950/60 lg:w-[var(--chat-width)] lg:border-l lg:border-t-0"
       style={{ '--chat-width': `${width}px` }}
     >
-      <header className="flex shrink-0 items-center justify-between border-b border-white/5 px-4 py-3">
-        <div className="relative" ref={dropdownRef}>
+      <header className="relative flex shrink-0 items-center justify-between border-b border-white/5 px-4 py-3">
+        <div className="absolute inset-x-0 flex justify-center">
+          <span className="truncate text-sm font-semibold text-white">
+            {activeThread?.title ?? 'Select chat'}
+          </span>
+        </div>
+        <div className="relative flex items-center gap-2" ref={dropdownRef}>
           <button
             type="button"
-            className="flex max-w-[180px] items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-semibold text-white hover:bg-white/10"
+            className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-slate-400 hover:bg-white/10 hover:text-white"
             onClick={() => setIsThreadDropdownOpen((prev) => !prev)}
           >
-            <span className="truncate">
-              {activeThread?.title ?? 'Select chat'}
-            </span>
             <ChevronDown size={14} className={`shrink-0 transition-transform ${isThreadDropdownOpen ? 'rotate-180' : ''}`} />
           </button>
           {isThreadDropdownOpen && (
