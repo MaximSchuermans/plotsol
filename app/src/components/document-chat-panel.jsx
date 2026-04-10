@@ -1,10 +1,26 @@
 import { Bot, ImageIcon, MessageSquare, Send, Sigma } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import rehypeKatex from 'rehype-katex'
+import remarkMath from 'remark-math'
 
 import { Button } from '@/components/ui/button'
 
-export default function DocumentChatPanel() {
+const previewResponse = String.raw`Once enabled, this panel will answer questions grounded in the selected PDF and cite relevant passages.
+
+Inline math works, for example the Gaussian integral $\int_0^\infty e^{-x^2}\,dx = \frac{\sqrt{\pi}}{2}$.
+
+Display math also renders in chat:
+
+$$
+\hat{f}(\omega)=\int_{-\infty}^{\infty} f(x)e^{-i\omega x}\,dx
+$$`
+
+export default function DocumentChatPanel({ width = 384 }) {
   return (
-    <aside className="flex h-full min-h-0 w-full shrink-0 flex-col border-t border-white/5 bg-slate-950/60 lg:w-[24rem] lg:border-l lg:border-t-0">
+    <aside
+      className="flex h-full min-h-0 w-full shrink-0 flex-col border-t border-white/5 bg-slate-950/60 lg:w-[var(--chat-width)] lg:border-l lg:border-t-0"
+      style={{ '--chat-width': `${width}px` }}
+    >
       <header className="flex shrink-0 items-center justify-center border-b border-white/5 px-5 py-4">
         <h3 className="text-sm font-semibold text-white">Chat</h3>
       </header>
@@ -25,9 +41,11 @@ export default function DocumentChatPanel() {
             <Bot size={14} />
             Text Answer Preview
           </div>
-          <p className="text-sm text-slate-200">
-            Once enabled, this panel will answer questions grounded in the selected PDF and cite relevant passages.
-          </p>
+          <div className="chat-markdown text-sm text-slate-200">
+            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+              {previewResponse}
+            </ReactMarkdown>
+          </div>
         </div>
 
         <div className="rounded-2xl border border-sky-300/15 bg-sky-400/5 p-4">
@@ -45,9 +63,11 @@ export default function DocumentChatPanel() {
             <Sigma size={14} />
             Math Expression Preview
           </div>
-          <p className="rounded-lg bg-slate-900/80 px-3 py-2 font-mono text-xs text-slate-200">
-            {'\\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}'}
-          </p>
+          <div className="rounded-lg bg-slate-900/80 px-3 py-2 text-xs text-slate-200">
+            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+              {String.raw`$$\int_0^\infty e^{-x^2}\,dx = \frac{\sqrt{\pi}}{2}$$`}
+            </ReactMarkdown>
+          </div>
         </div>
       </div>
 

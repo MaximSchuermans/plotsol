@@ -64,3 +64,13 @@
     @apply bg-background text-foreground;
   }
 }
+
+.chat-markdown p + p {
+  margin-top: 0.6rem;
+}
+
+.chat-markdown .katex-display {
+  margin: 0.8rem 0 0.25rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+}

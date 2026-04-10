@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { FileText, ExternalLink, Clock, Loader2, Trash2, Eye, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { FileText, ExternalLink, Clock, Loader2, Trash2, Eye, PanelLeftClose, PanelLeftOpen, LogOut } from 'lucide-react'
 import LoginForm from './components/login-form'
 import { Button } from '@/components/ui/button'
 import PdfViewer from './components/pdf-viewer'
@@ -8,8 +8,29 @@ import './App.css'
 
 const TOKEN_STORAGE_KEY = 'plotsol-auth-token'
 const USER_STORAGE_KEY = 'plotsol-auth-user'
+const EXPLORER_WIDTH_STORAGE_KEY = 'plotsol-explorer-width'
+const CHAT_WIDTH_STORAGE_KEY = 'plotsol-chat-width'
+
+const EXPLORER_MIN_WIDTH = 260
+const EXPLORER_MAX_WIDTH = 480
+const EXPLORER_DEFAULT_WIDTH = 320
+const EXPLORER_COLLAPSED_WIDTH = 80
+
+const CHAT_MIN_WIDTH = 300
+const CHAT_MAX_WIDTH = 560
+const CHAT_DEFAULT_WIDTH = 384
+const MAIN_MIN_WIDTH = 420
+
+const clampPanelWidth = (value, min, max, fallback) => {
+  if (!Number.isFinite(value)) {
+    return fallback
+  }
+
+  return Math.min(max, Math.max(min, value))
+}
 
 function App() {
+  const appShellRef = useRef(null)
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_STORAGE_KEY))
   const [username, setUsername] = useState(() => localStorage.getItem(USER_STORAGE_KEY))
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -25,6 +46,19 @@ function App() {
   const [selectedFile, setSelectedFile] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
   const [isExplorerCollapsed, setIsExplorerCollapsed] = useState(false)
+  const [explorerWidth, setExplorerWidth] = useState(() => clampPanelWidth(
+    Number(localStorage.getItem(EXPLORER_WIDTH_STORAGE_KEY)),
+    EXPLORER_MIN_WIDTH,
+    EXPLORER_MAX_WIDTH,
+    EXPLORER_DEFAULT_WIDTH,
+  ))
+  const [chatWidth, setChatWidth] = useState(() => clampPanelWidth(
+    Number(localStorage.getItem(CHAT_WIDTH_STORAGE_KEY)),
+    CHAT_MIN_WIDTH,
+    CHAT_MAX_WIDTH,
+    CHAT_DEFAULT_WIDTH,
+  ))
+  const [activeResizer, setActiveResizer] = useState(null)
 
   useEffect(() => {
     if (token) {
@@ -41,6 +75,64 @@ function App() {
       localStorage.removeItem(USER_STORAGE_KEY)
     }
   }, [username])
+
+  useEffect(() => {
+    localStorage.setItem(EXPLORER_WIDTH_STORAGE_KEY, String(explorerWidth))
+  }, [explorerWidth])
+
+  useEffect(() => {
+    localStorage.setItem(CHAT_WIDTH_STORAGE_KEY, String(chatWidth))
+  }, [chatWidth])
+
+  useEffect(() => {
+    if (!activeResizer) {
+      return undefined
+    }
+
+    const handlePointerMove = (event) => {
+      const shellRect = appShellRef.current?.getBoundingClientRect()
+      if (!shellRect) {
+        return
+      }
+
+      const maxExplorerWidth = Math.max(
+        EXPLORER_MIN_WIDTH,
+        Math.min(EXPLORER_MAX_WIDTH, shellRect.width - chatWidth - MAIN_MIN_WIDTH),
+      )
+      const effectiveExplorerWidth = isExplorerCollapsed ? EXPLORER_COLLAPSED_WIDTH : explorerWidth
+      const maxChatWidth = Math.max(
+        CHAT_MIN_WIDTH,
+        Math.min(CHAT_MAX_WIDTH, shellRect.width - effectiveExplorerWidth - MAIN_MIN_WIDTH),
+      )
+
+      if (activeResizer === 'explorer' && !isExplorerCollapsed) {
+        const localX = event.clientX - shellRect.left
+        setExplorerWidth(clampPanelWidth(localX, EXPLORER_MIN_WIDTH, maxExplorerWidth, EXPLORER_DEFAULT_WIDTH))
+        return
+      }
+
+      if (activeResizer === 'chat') {
+        const nextChatWidth = shellRect.right - event.clientX
+        setChatWidth(clampPanelWidth(nextChatWidth, CHAT_MIN_WIDTH, maxChatWidth, CHAT_DEFAULT_WIDTH))
+      }
+    }
+
+    const handlePointerUp = () => {
+      setActiveResizer(null)
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [activeResizer, chatWidth, explorerWidth, isExplorerCollapsed])
 
   const handleLogout = useCallback(() => {
     setToken(null)
@@ -237,12 +329,28 @@ function App() {
 
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-slate-950 text-slate-100">
-      <aside className={`flex h-full flex-col overflow-hidden border-r border-white/5 bg-slate-900/80 p-6 shadow-[0_20px_60px_rgba(2,6,23,0.7)] backdrop-blur-lg transition-all duration-300 ${
-        isExplorerCollapsed ? 'w-20' : 'w-80'
-      }`}>
+    <div ref={appShellRef} className="flex h-dvh overflow-hidden bg-slate-950 text-slate-100">
+      <aside
+        className={`flex h-full flex-col overflow-hidden border-r border-white/5 bg-slate-900/80 p-6 shadow-[0_20px_60px_rgba(2,6,23,0.7)] backdrop-blur-lg transition-all duration-300 ${
+          isExplorerCollapsed ? 'w-20' : 'w-[var(--explorer-width)]'
+        }`}
+        style={
+          isExplorerCollapsed
+            ? undefined
+            : { '--explorer-width': `${explorerWidth}px` }
+        }
+      >
         <div className="flex items-center justify-between text-[0.65rem] uppercase tracking-[0.45em] text-slate-500">
-          <span>{isExplorerCollapsed ? 'Ex' : 'Explorer'}</span>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleLogout}
+            className="h-8 gap-1.5 border border-white/15 bg-white/10 px-3 text-xs font-medium text-slate-100 shadow-sm hover:bg-white/15"
+            title="Sign out"
+          >
+            <LogOut size={14} />
+            {!isExplorerCollapsed ? 'Sign out' : null}
+          </Button>
           <Button
             variant="ghost"
             size="icon"
@@ -381,6 +489,21 @@ function App() {
           </div>
         </div> : null}
       </aside>
+      {!isExplorerCollapsed ? (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize explorer"
+          onPointerDown={(event) => {
+            if (event.button !== 0) return
+            event.preventDefault()
+            setActiveResizer('explorer')
+          }}
+          className={`relative hidden w-1 shrink-0 cursor-col-resize bg-white/5 transition-colors lg:block ${
+            activeResizer === 'explorer' ? 'bg-emerald-500/40' : 'hover:bg-emerald-400/30'
+          }`}
+        />
+      ) : null}
       <main className="flex-1 overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
         <div className="flex h-full min-h-0 flex-col lg:flex-row">
           <div className="min-h-0 flex-1 overflow-hidden">
@@ -397,9 +520,6 @@ function App() {
                         Select a document from the explorer to begin reading, or upload a new one.
                       </p>
                     </div>
-                    <Button variant="ghost" onClick={handleLogout} className="text-slate-200 hover:bg-white/10">
-                      Sign out
-                    </Button>
                   </div>
                   <p className="text-sm text-slate-400">
                     Everything you upload is archived in Azure Blob Storage while we keep the file metadata, ownership, and audit trail in MongoDB.
@@ -436,10 +556,6 @@ function App() {
                       <ExternalLink size={14} className="mr-2" />
                       Full Window
                     </Button>
-                    <div className="ml-4 h-6 w-px bg-white/10" />
-                    <Button variant="ghost" onClick={handleLogout} className="ml-2 text-xs text-slate-400 hover:text-white">
-                      Sign out
-                    </Button>
                   </div>
                 </header>
                 <div className="min-h-0 flex-1 overflow-hidden bg-slate-900/20">
@@ -448,7 +564,20 @@ function App() {
               </div>
             )}
           </div>
-          <DocumentChatPanel />
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize chat"
+            onPointerDown={(event) => {
+              if (event.button !== 0) return
+              event.preventDefault()
+              setActiveResizer('chat')
+            }}
+            className={`relative hidden w-1 shrink-0 cursor-col-resize bg-white/5 transition-colors lg:block ${
+              activeResizer === 'chat' ? 'bg-sky-400/40' : 'hover:bg-sky-300/30'
+            }`}
+          />
+          <DocumentChatPanel width={chatWidth} />
         </div>
       </main>
     </div>
