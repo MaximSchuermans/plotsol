@@ -19,4 +19,16 @@ public sealed class FileStorageService
     await blobClient.UploadAsync(content, new BlobHttpHeaders { ContentType = contentType }, cancellationToken: cancellationToken);
     return blobClient.Uri;
   }
+
+  public async Task DeleteAsync(string blobName, CancellationToken cancellationToken = default)
+  {
+    var blobClient = _container.GetBlobClient(blobName);
+    await blobClient.DeleteIfExistsAsync(cancellationToken: cancellationToken);
+  }
+
+  public async Task<Stream> OpenReadAsync(string blobName, CancellationToken cancellationToken = default)
+  {
+    var blobClient = _container.GetBlobClient(blobName);
+    return await blobClient.OpenReadAsync(cancellationToken: cancellationToken);
+  }
 }

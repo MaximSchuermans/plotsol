@@ -20,4 +20,10 @@ public sealed class FileRepository : IFileRepository
     => await _files.Find(f => f.UserId == userId)
                    .SortByDescending(f => f.UploadedAt)
                    .ToListAsync();
+
+  public async Task<FileMetadata?> GetByIdAsync(string id)
+    => await _files.Find(f => f.Id == id).FirstOrDefaultAsync();
+
+  public async Task DeleteAsync(string id)
+    => await _files.DeleteOneAsync(f => f.Id == id);
 }

@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Http.Features;
 using MongoDB.Driver;
 
 var envFilePath = Path.Combine(Directory.GetCurrentDirectory(), ".env");
@@ -78,12 +79,12 @@ var key = Encoding.UTF8.GetBytes(jwtSettings.Secret);
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
   .AddJwtBearer(options =>
   {
-    options.RequireHttpsMetadata = true;
+    options.RequireHttpsMetadata = false;
     options.SaveToken = true;
     options.TokenValidationParameters = new TokenValidationParameters
     {
-      ValidateIssuer = true,
-      ValidateAudience = true,
+      ValidateIssuer = false,
+      ValidateAudience = false,
       ValidateLifetime = true,
       ValidateIssuerSigningKey = true,
       ValidIssuer = jwtSettings.Issuer,
@@ -94,6 +95,16 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
   });
 
 builder.Services.AddAuthorization();
+
+builder.WebHost.ConfigureKestrel(options =>
+{
+  options.Limits.MaxRequestBodySize = 104857600; // 100MB
+});
+
+builder.Services.Configure<FormOptions>(options =>
+{
+  options.MultipartBodyLengthLimit = 104857600; // 100MB
+});
 
 var app = builder.Build();
 
@@ -121,19 +132,32 @@ app.MapPost("/auth/login", async (LoginRequest request, IUserRepository reposito
 
 app.MapGet("/auth/me", [Authorize] async (ClaimsPrincipal principal, IUserRepository repository) =>
 {
-  var userId = principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
-  if (string.IsNullOrEmpty(userId))
+  var userId = GetUserId(principal);
+  var user = !string.IsNullOrEmpty(userId)
+    ? await repository.GetByIdAsync(userId)
+    : await GetUserByUsernameClaimAsync(principal, repository);
+  if (user is null)
   {
     return Results.Unauthorized();
   }
 
-  var user = await repository.GetByIdAsync(userId);
-  if (user is null)
-  {
-    return Results.NotFound();
-  }
-
   return Results.Ok(new UserProfile(user.Id!, user.Username));
+});
+
+app.MapGet("/auth/debug", [Authorize] (ClaimsPrincipal principal) =>
+{
+  var claims = principal.Claims
+    .Select(c => new { c.Type, c.Value })
+    .ToList();
+
+  return Results.Ok(new
+  {
+    principal.Identity?.IsAuthenticated,
+    principal.Identity?.AuthenticationType,
+    principal.Identity?.Name,
+    UserId = GetUserId(principal),
+    Claims = claims,
+  });
 });
 
 app.MapPost("/files/upload", [Authorize] async (
@@ -162,13 +186,10 @@ app.MapPost("/files/upload", [Authorize] async (
     return Results.BadRequest(new { message = "Only PDF uploads are supported." });
   }
 
-  var userId = principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
-  if (string.IsNullOrEmpty(userId))
-  {
-    return Results.Unauthorized();
-  }
-
-  var user = await userRepository.GetByIdAsync(userId);
+  var userId = GetUserId(principal);
+  var user = !string.IsNullOrEmpty(userId)
+    ? await userRepository.GetByIdAsync(userId)
+    : await GetUserByUsernameClaimAsync(principal, userRepository);
   if (user is null)
   {
     return Results.Unauthorized();
@@ -204,10 +225,16 @@ app.MapPost("/files/upload", [Authorize] async (
   });
 });
 
-app.MapGet("/files", [Authorize] async (ClaimsPrincipal principal, IFileRepository fileRepo) =>
+app.MapGet("/files", [Authorize] async (ClaimsPrincipal principal, IFileRepository fileRepo, IUserRepository userRepository) =>
 {
-  var userId = principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
-  if (string.IsNullOrEmpty(userId))
+  var userId = GetUserId(principal);
+  if (string.IsNullOrWhiteSpace(userId))
+  {
+    var user = await GetUserByUsernameClaimAsync(principal, userRepository);
+    userId = user?.Id;
+  }
+
+  if (string.IsNullOrWhiteSpace(userId))
   {
     return Results.Unauthorized();
   }
@@ -220,6 +247,56 @@ app.MapGet("/files", [Authorize] async (ClaimsPrincipal principal, IFileReposito
     f.BlobUri,
     f.UploadedAt
   }));
+});
+
+app.MapDelete("/files/{id}", [Authorize] async (string id, ClaimsPrincipal principal, IFileRepository fileRepo, FileStorageService storageService, IUserRepository userRepository) =>
+{
+  var userId = GetUserId(principal);
+  if (string.IsNullOrWhiteSpace(userId))
+  {
+    var user = await GetUserByUsernameClaimAsync(principal, userRepository);
+    userId = user?.Id;
+  }
+
+  if (string.IsNullOrWhiteSpace(userId))
+  {
+    return Results.Unauthorized();
+  }
+
+  var file = await fileRepo.GetByIdAsync(id);
+  if (file is null || file.UserId != userId)
+  {
+    return Results.NotFound();
+  }
+
+  await storageService.DeleteAsync(file.BlobName);
+  await fileRepo.DeleteAsync(id);
+
+  return Results.NoContent();
+});
+
+app.MapGet("/files/{id}/content", [Authorize] async (string id, ClaimsPrincipal principal, IFileRepository fileRepo, FileStorageService storageService, IUserRepository userRepository) =>
+{
+  var userId = GetUserId(principal);
+  if (string.IsNullOrWhiteSpace(userId))
+  {
+    var user = await GetUserByUsernameClaimAsync(principal, userRepository);
+    userId = user?.Id;
+  }
+
+  if (string.IsNullOrWhiteSpace(userId))
+  {
+    return Results.Unauthorized();
+  }
+
+  var file = await fileRepo.GetByIdAsync(id);
+  if (file is null || file.UserId != userId)
+  {
+    return Results.NotFound();
+  }
+
+  var stream = await storageService.OpenReadAsync(file.BlobName);
+  return Results.File(stream, file.ContentType, file.FileName, enableRangeProcessing: true);
 });
 
 app.MapGet("/health", () => Results.Ok(new { status = "Healthy" }));
@@ -245,4 +322,24 @@ static void EnsureSettings(MongoDbSettings mongo, JwtSettings jwt, BlobStorageSe
   ThrowIfMissing(jwt.Secret, "Jwt:Secret");
   ThrowIfMissing(blob.ConnectionString, "BlobStorage:ConnectionString");
   ThrowIfMissing(blob.ContainerName, "BlobStorage:ContainerName");
+}
+
+static string? GetUserId(ClaimsPrincipal principal)
+{
+  return principal.FindFirstValue(JwtRegisteredClaimNames.Sub)
+    ?? principal.FindFirstValue(ClaimTypes.NameIdentifier);
+}
+
+static async Task<User?> GetUserByUsernameClaimAsync(ClaimsPrincipal principal, IUserRepository repository)
+{
+  var username = principal.FindFirstValue("username")
+    ?? principal.FindFirstValue(JwtRegisteredClaimNames.UniqueName)
+    ?? principal.Identity?.Name;
+
+  if (string.IsNullOrWhiteSpace(username))
+  {
+    return null;
+  }
+
+  return await repository.GetByUsernameAsync(username);
 }
