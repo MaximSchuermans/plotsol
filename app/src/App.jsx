@@ -59,6 +59,7 @@ function App() {
     CHAT_DEFAULT_WIDTH,
   ))
   const [activeResizer, setActiveResizer] = useState(null)
+  const [focusPage, setFocusPage] = useState(null)
 
   useEffect(() => {
     if (token) {
@@ -210,6 +211,7 @@ function App() {
       // If deleted file was being viewed, clear it
       if (selectedFile?.id === id) {
         setSelectedFile(null)
+        setFocusPage(null)
       }
       
       await fetchFiles()
@@ -222,7 +224,22 @@ function App() {
 
   const handleReadFile = (file) => {
     setSelectedFile(file)
+    setFocusPage(null)
   }
+
+  const handleOpenSource = useCallback((source) => {
+    if (!source?.fileId) {
+      return
+    }
+
+    const sourceFile = files.find((file) => file.id === source.fileId)
+    if (!sourceFile) {
+      return
+    }
+
+    setSelectedFile(sourceFile)
+    setFocusPage(Number(source.pageNumber) || 1)
+  }, [files])
 
   const handleOpenFull = async (file) => {
     try {
@@ -314,7 +331,7 @@ function App() {
         } else {
           try {
             const payload = JSON.parse(xhr.responseText)
-            setUploadError(payload?.message ?? 'Upload failed. Try again.')
+            setUploadError(payload?.message ?? payload?.detail ?? 'Upload failed. Try again.')
           } catch {
             setUploadError('Upload failed. Try again.')
           }
@@ -543,7 +560,10 @@ function App() {
                       variant="ghost"
                       size="sm"
                       className="h-8 text-xs text-slate-400 hover:bg-white/5 hover:text-white"
-                      onClick={() => setSelectedFile(null)}
+                      onClick={() => {
+                        setSelectedFile(null)
+                        setFocusPage(null)
+                      }}
                     >
                       Close
                     </Button>
@@ -559,7 +579,7 @@ function App() {
                   </div>
                 </header>
                 <div className="min-h-0 flex-1 overflow-hidden bg-slate-900/20">
-                  <PdfViewer key={selectedFile.id} fileId={selectedFile.id} token={token} />
+                  <PdfViewer key={selectedFile.id} fileId={selectedFile.id} token={token} focusPage={focusPage} />
                 </div>
               </div>
             )}
@@ -577,7 +597,13 @@ function App() {
               activeResizer === 'chat' ? 'bg-sky-400/40' : 'hover:bg-sky-300/30'
             }`}
           />
-          <DocumentChatPanel width={chatWidth} />
+          <DocumentChatPanel
+            width={chatWidth}
+            selectedFileName={selectedFile?.fileName ?? ''}
+            selectedFileId={selectedFile?.id ?? ''}
+            token={token ?? ''}
+            onOpenSource={handleOpenSource}
+          />
         </div>
       </main>
     </div>

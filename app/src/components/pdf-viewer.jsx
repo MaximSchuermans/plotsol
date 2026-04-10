@@ -10,7 +10,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url,
 ).toString();
 
-const LazyPdfPage = memo(function LazyPdfPage({ pageNumber, scale, scrollRootRef }) {
+const LazyPdfPage = memo(function LazyPdfPage({ pageNumber, scale, scrollRootRef, isFocused = false }) {
   const wrapperRef = useRef(null);
   const [shouldRender, setShouldRender] = useState(pageNumber <= 2);
 
@@ -47,7 +47,11 @@ const LazyPdfPage = memo(function LazyPdfPage({ pageNumber, scale, scrollRootRef
   }, [shouldRender, scrollRootRef]);
 
   return (
-    <div ref={wrapperRef} className="w-full max-w-fit self-center">
+    <div
+      ref={wrapperRef}
+      data-page-number={pageNumber}
+      className={`w-full max-w-fit self-center ${isFocused ? 'ring-2 ring-emerald-400/70 ring-offset-4 ring-offset-slate-950 rounded-sm' : ''}`}
+    >
       {shouldRender ? (
         <Page
           pageNumber={pageNumber}
@@ -69,7 +73,7 @@ const LazyPdfPage = memo(function LazyPdfPage({ pageNumber, scale, scrollRootRef
   );
 });
 
-export default function PdfViewer({ fileId, token }) {
+export default function PdfViewer({ fileId, token, focusPage = null }) {
   const [numPages, setNumPages] = useState(null);
   const [scale, setScale] = useState(1.0);
   const [retryKey, setRetryKey] = useState(0);
@@ -105,6 +109,19 @@ export default function PdfViewer({ fileId, token }) {
     setLoadFailed(false);
     setRetryKey((prev) => prev + 1);
   }
+
+  useEffect(() => {
+    if (!focusPage || !numPages || !scrollRootRef.current) {
+      return;
+    }
+
+    const target = scrollRootRef.current.querySelector(`[data-page-number="${focusPage}"]`);
+    if (!target) {
+      return;
+    }
+
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [focusPage, numPages]);
 
   return (
     <div className="flex h-full min-h-0 flex-col items-center bg-slate-900/40 p-6">
@@ -197,6 +214,7 @@ export default function PdfViewer({ fileId, token }) {
                   pageNumber={index + 1}
                   scale={scale}
                   scrollRootRef={scrollRootRef}
+                  isFocused={focusPage === index + 1}
                 />
               ))
             : null}
