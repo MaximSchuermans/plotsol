@@ -2,8 +2,7 @@ import { defineConfig } from 'vite'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import tailwindcss from '@tailwindcss/vite'
-import react, { reactCompilerPreset } from '@vitejs/plugin-react'
-import babel from '@rolldown/plugin-babel'
+import react from '@vitejs/plugin-react'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const apiWwwRoot = path.resolve(__dirname, "../api/wwwroot")
@@ -13,7 +12,6 @@ export default defineConfig({
   plugins: [
     tailwindcss(),
     react(),
-    babel({ presets: [reactCompilerPreset()] })
   ],
   resolve: {
     alias: {
