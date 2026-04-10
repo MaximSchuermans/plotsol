@@ -19,7 +19,13 @@ public sealed class UserRepository : IUserRepository
 
   public async Task<User?> GetByUsernameAsync(string username)
   {
-    return await _users.Find(u => u.Username.ToLower() == username.ToLower()).FirstOrDefaultAsync();
+    if (string.IsNullOrWhiteSpace(username))
+    {
+      return null;
+    }
+
+    var normalized = username.Trim().ToLowerInvariant();
+    return await _users.Find(u => u.NormalizedUsername == normalized).FirstOrDefaultAsync();
   }
 
   public Task CreateAsync(User user)
